@@ -88,7 +88,7 @@ namespace ChatBot
             {
                 var username = e.ChatMessage.Username;
                 var channelLink = teamMembers[userId].Url;
-                client.SendMessage(e.ChatMessage.Channel, $"Welcome {username} from the {teamName} team!  They are awesome and you should check out their channel at {channelLink}");
+                client.SendMessage(e.ChatMessage.Channel, $"Welcome @{username} from the {teamName} team!  They are awesome and you should check out their channel at {channelLink}");
                 announcedTeamMembers.Add(userId);
             }
         }
