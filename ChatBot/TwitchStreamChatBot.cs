@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using TwitchLib.Api;
@@ -253,6 +254,8 @@ namespace ChatBot
                     sb.AppendLine();
                 }
             }
+
+            File.WriteAllText(filename, sb.ToString());
         }
 
         private string FormatSubscription(SubscriptionInfo subInfo)
