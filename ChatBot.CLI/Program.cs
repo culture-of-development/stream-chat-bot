@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Timers;
 
 namespace ChatBot.CLI
 {
     class Program
     {
+        static Timer outputStreamTemplateTimer;
+        
         static void Main(string[] args)
         {
             Console.WriteLine("Hello World!");
@@ -21,6 +24,12 @@ namespace ChatBot.CLI
             var twitchBot = new TwitchStreamChatBot();
             twitchBot.Initialize(twitchUsername, twitchAccessToken, twitchApiClientId, twitchApiAccessToken, channel, teamUrlSlug);
             twitchBot.ConnectChat();
+
+            string templateFilename = $@"I:\culture-of-development\culture-of-development.github.com\source\_posts\s0000-{DateTime.UtcNow.ToString("yyyyMMdd")}.md";
+            outputStreamTemplateTimer = new Timer(60_000);
+            outputStreamTemplateTimer.Elapsed += (o, _) => twitchBot.WriteMarkdownTemplate(templateFilename);
+            outputStreamTemplateTimer.AutoReset = true;
+            outputStreamTemplateTimer.Start();
 
             Console.ReadLine();
         }
