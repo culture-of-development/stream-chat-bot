@@ -18,9 +18,9 @@ namespace ChatBot
         TwitchClient client;
         TwitchAPI api;
 
-        Dictionary<string, Channel> teamMembers;
+        Dictionary<string, Channel> teamMembers = new Dictionary<string, Channel>();
         string teamName;
-        HashSet<string> announcedTeamMembers;
+        HashSet<string> announcedTeamMembers = new HashSet<string>();
 
         public void Initialize(string username, string accessToken, string apiClientId, string apiAccessToken, string channel, string teamUrlSlug)
         {
@@ -65,9 +65,7 @@ namespace ChatBot
             var teamTask = api.V5.Teams.GetTeamAsync(teamUrlSlug);
             var team = teamTask.GetAwaiter().GetResult();
 
-            announcedTeamMembers = new HashSet<string>();
             teamName = team.DisplayName;
-            teamMembers = new Dictionary<string, Channel>();
             foreach(var user in team.Users)
             {
                 teamMembers.Add(user.Id, user);
@@ -80,17 +78,17 @@ namespace ChatBot
             Console.WriteLine($"Identified {teamMembers.Count} members on the {teamName} team.");
         }
   
-        private void Client_OnLog(object sender, OnLogArgs e)
+        public void Client_OnLog(object sender, OnLogArgs e)
         {
             Console.WriteLine($"{e.DateTime.ToString()}: {e.BotUsername} - {e.Data}");
         }
   
-        private void Client_OnConnected(object sender, OnConnectedArgs e)
+        public void Client_OnConnected(object sender, OnConnectedArgs e)
         {
             Console.WriteLine($"Connected to {e.AutoJoinChannel}");
         }
   
-        private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
+        public void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
         {
             var userId = e.ChatMessage.UserId;
             if (teamMembers.ContainsKey(userId) && !announcedTeamMembers.Contains(userId))
@@ -235,9 +233,9 @@ youtube_embed: https://www.youtube.com/embed/TODO
             sb.AppendLine("TODO: stream notes about what you actually accomplished");
             sb.AppendLine();
 
-            if (raids.Count > 0 || subs.Count > 0 || hosts.Count > 0)
+            if (raids.Count > 0 || subs.Count > 0 || hosts.Count > 0 || cheers.Count > 0)
             {
-                sb.AppendLine("## Supporters");
+                sb.AppendLine("## Today's Supporters");
                 sb.AppendLine();
 
                 // subscriptions
