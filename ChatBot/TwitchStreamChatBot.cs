@@ -238,7 +238,7 @@ namespace ChatBot
                     sb.AppendLine();
                     foreach(var raid in raids.Select(m => m.Value).OrderBy(m => m.EventTime))
                     {
-                        sb.AppendLine($"- {raid.EventTime}: {raid.Channel} raided with {raid.ViewerCount} viewers!");
+                        sb.AppendLine($"- {raid.EventTime}: [{raid.Channel}](//twitch.tv/{raid.Channel}) raided with {raid.ViewerCount} viewers!");
                     }
                     sb.AppendLine();
                 }
@@ -250,7 +250,7 @@ namespace ChatBot
                     sb.AppendLine();
                     foreach(var host in hosts.Select(m => m.Value).OrderBy(m => m.EventTime))
                     {
-                        sb.AppendLine($"- {host.EventTime}: {host.Channel} hosted with {host.ViewerCount} viewers!");
+                        sb.AppendLine($"- {host.EventTime}: [{host.Channel}](//twitch.tv/{host.Channel}) hosted with {host.ViewerCount} viewers!");
                     }
                     sb.AppendLine();
                 }
@@ -259,7 +259,7 @@ namespace ChatBot
             if (endOfStreamRaid != null) {
                 sb.AppendLine("## Pay it forward");
                 sb.AppendLine();
-                sb.AppendLine($"- {endOfStreamRaid.EventTime}: we raided {endOfStreamRaid.Channel} with {endOfStreamRaid.ViewerCount} viewers!");
+                sb.AppendLine($"- {endOfStreamRaid.EventTime}: we raided [{endOfStreamRaid.Channel}](//twitch.tv/{endOfStreamRaid.Channel}) with {endOfStreamRaid.ViewerCount} viewers!");
                 sb.AppendLine();
             }
             
