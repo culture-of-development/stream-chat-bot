@@ -100,6 +100,16 @@ namespace ChatBot
                 client.SendMessage(e.ChatMessage.Channel, $"Welcome @{username} from the {teamName} team!  They are awesome and you should check out their channel at {channelLink}");
                 announcedTeamMembers.Add(userId);
             }
+            if (e.ChatMessage.Bits > 0)
+            {
+                var info = new CheerInfo()
+                {
+                    Channel = e.ChatMessage.Username,
+                    EventTime = DateTime.UtcNow,
+                    Bits = e.ChatMessage.Bits,
+                };
+                cheers.Add(info);
+            }
         }
 
         RaidInfo endOfStreamRaid;
@@ -110,6 +120,8 @@ namespace ChatBot
         public IReadOnlyDictionary<string, HostInfo> Hosts => hosts;
         List<SubscriptionInfo> subs = new List<SubscriptionInfo>();
         public IReadOnlyList<SubscriptionInfo> Subs => subs;
+        List<CheerInfo> cheers = new List<CheerInfo>();
+        public IReadOnlyList<CheerInfo> Cheers => cheers;
 
         public void Client_OnRaidNotification(object sender, OnRaidNotificationArgs e)
         {
@@ -211,7 +223,16 @@ namespace ChatBot
         public StringBuilder PopulateMarkdownTemplate()
         {
             var sb = new StringBuilder();
-            sb.AppendLine($"# Stream Notes for {DateTime.Now.ToShortDateString()}");
+            sb.AppendLine($@"---
+title: 'S0000 - TODO: stream title'
+author: Nick Larsen
+categories: streams
+date: {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}
+youtube_url: https://youtu.be/TODO
+youtube_embed: https://www.youtube.com/embed/TODO
+---");
+            sb.AppendLine();
+            sb.AppendLine("TODO: stream notes about what you actually accomplished");
             sb.AppendLine();
 
             if (raids.Count > 0 || subs.Count > 0 || hosts.Count > 0)
@@ -227,6 +248,17 @@ namespace ChatBot
                     foreach(var sub in subs.OrderBy(m => m.EventTime))
                     {
                         sb.AppendLine($"- {sub.EventTime}: {FormatSubscription(sub)}");
+                    }
+                    sb.AppendLine();
+                }
+
+                if (cheers.Count > 0)
+                {
+                    sb.AppendLine("### Cheers");
+                    sb.AppendLine();
+                    foreach(var cheer in cheers.OrderBy(m => m.EventTime))
+                    {
+                        sb.AppendLine($"- {cheer.EventTime}: {cheer.Channel} cheered with {cheer.Bits.ToString("#,#")} bits!");
                     }
                     sb.AppendLine();
                 }
