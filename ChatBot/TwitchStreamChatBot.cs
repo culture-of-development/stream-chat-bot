@@ -45,7 +45,7 @@ namespace ChatBot
             client.OnMessageReceived += Client_OnMessageReceived;
             client.OnConnected += Client_OnConnected;
             client.OnBeingHosted += Client_OnBeingHosted;
-            client.OnRaidNotification += Client_OnRaidNotification;
+            client.OnRaidNotification += Client_OnRaidNotification; // TODO this is probably me raiding at the end of stream
             client.OnNewSubscriber += Client_OnNewSubscriber;
             client.OnReSubscriber += Client_OnReSubscriber;
             client.OnGiftedSubscription += Client_OnGiftedSubscription;
@@ -102,11 +102,16 @@ namespace ChatBot
             }
         }
 
+        RaidInfo endOfStreamRaid;
+        public RaidInfo EndOfStreamRaid => endOfStreamRaid;
         Dictionary<string, RaidInfo> raids = new Dictionary<string, RaidInfo>();
+        public IReadOnlyDictionary<string, RaidInfo> Raids => raids;
         Dictionary<string, HostInfo> hosts = new Dictionary<string, HostInfo>();
+        public IReadOnlyDictionary<string, HostInfo> Hosts => hosts;
         List<SubscriptionInfo> subs = new List<SubscriptionInfo>();
+        public IReadOnlyList<SubscriptionInfo> Subs => subs;
 
-        private void Client_OnRaidNotification(object sender, OnRaidNotificationArgs e)
+        public void Client_OnRaidNotification(object sender, OnRaidNotificationArgs e)
         {
             var channel = e.RaidNotificaiton.DisplayName;
             var info = new RaidInfo
@@ -115,20 +120,10 @@ namespace ChatBot
                 EventTime = DateTime.UtcNow, // TODO: get this from the timestamp
                 ViewerCount = int.Parse(e.RaidNotificaiton.MsgParamViewerCount),
             };
-            lock(raids)
-            {
-                if (!raids.ContainsKey(channel))
-                {
-                    raids.Add(channel, info);
-                }
-                else
-                {
-                    raids[channel] = info;
-                }
-            }
+            endOfStreamRaid = info;
         }
 
-        private void Client_OnBeingHosted(object sender, OnBeingHostedArgs e)
+        public void Client_OnBeingHosted(object sender, OnBeingHostedArgs e)
         {
             if (e.BeingHostedNotification.IsAutoHosted) return;
             var channel = e.BeingHostedNotification.HostedByChannel;
@@ -151,7 +146,7 @@ namespace ChatBot
             }
         }
 
-        private void Client_OnNewSubscriber(object sender, OnNewSubscriberArgs e)
+        public void Client_OnNewSubscriber(object sender, OnNewSubscriberArgs e)
         {
             var info = new SubscriptionInfo
             {
@@ -163,7 +158,7 @@ namespace ChatBot
             OnSub(info);
         }
 
-        private void Client_OnReSubscriber(object sender, OnReSubscriberArgs e)
+        public void Client_OnReSubscriber(object sender, OnReSubscriberArgs e)
         {
             var info = new SubscriptionInfo
             {
@@ -175,7 +170,7 @@ namespace ChatBot
             OnSub(info);
         }
 
-        private void Client_OnGiftedSubscription(object sender, OnGiftedSubscriptionArgs e)
+        public void Client_OnGiftedSubscription(object sender, OnGiftedSubscriptionArgs e)
         {
             var info = new SubscriptionInfo
             {
@@ -187,7 +182,7 @@ namespace ChatBot
             OnSub(info);
         }
 
-        private void Client_OnCommunitySubscription(object sender, OnCommunitySubscriptionArgs e)
+        public void Client_OnCommunitySubscription(object sender, OnCommunitySubscriptionArgs e)
         {
             var info = new SubscriptionInfo
             {
@@ -208,6 +203,12 @@ namespace ChatBot
         }
 
         public void WriteMarkdownTemplate(string filename)
+        {
+            var sb = PopulateMarkdownTemplate();
+            File.WriteAllText(filename, sb.ToString());
+        }
+
+        public StringBuilder PopulateMarkdownTemplate()
         {
             var sb = new StringBuilder();
             sb.AppendLine($"# Stream Notes for {DateTime.Now.ToShortDateString()}");
@@ -255,7 +256,14 @@ namespace ChatBot
                 }
             }
 
-            File.WriteAllText(filename, sb.ToString());
+            if (endOfStreamRaid != null) {
+                sb.AppendLine("## Pay it forward");
+                sb.AppendLine();
+                sb.AppendLine($"- {endOfStreamRaid.EventTime}: we raided {endOfStreamRaid.Channel} with {endOfStreamRaid.ViewerCount} viewers!");
+                sb.AppendLine();
+            }
+            
+            return sb;
         }
 
         private string FormatSubscription(SubscriptionInfo subInfo)
