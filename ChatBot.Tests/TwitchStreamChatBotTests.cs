@@ -38,6 +38,46 @@ namespace ChatBot.Tests
         }
 
         [Fact]
+        public void Test_Client_OnMessageWithRaidCommand()
+        {
+            var chatBot = new TwitchStreamChatBot();
+            string chatMessageRaw = "@badge-info=subscriber/6;badges=broadcaster/1,subscriber/0,premium/1;color=;display-name=nick_larsen;emotes=;flags=;id=0e8c15ea-e4db-49cc-8f6f-d867d2675b3b;mod=0;room-id=61809127;subscriber=1;tmi-sent-ts=1571330987242;turbo=0;user-id=61809127;user-type= :nick_larsen!nick_larsen@nick_larsen.tmi.twitch.tv PRIVMSG #nick_larsen :/raid LuckyNoS7evin";
+            var ircMessage = GetIrcMessage(chatMessageRaw);
+            var emoteCollection = new TwitchLib.Client.Models.MessageEmoteCollection();
+            var args = new OnMessageReceivedArgs()
+            {
+                ChatMessage = new TwitchLib.Client.Models.ChatMessage("nick_larsen", ircMessage, ref emoteCollection),
+            };
+            Assert.True(chatBot.EndOfStreamRaid == null);
+            chatBot.Client_OnMessageReceived(null, args);
+            Assert.True(chatBot.EndOfStreamRaid.Channel == "LuckyNoS7evin");
+
+            var template = chatBot.PopulateMarkdownTemplate().ToString();
+            Assert.Contains("we raided [LuckyNoS7evin](//twitch.tv/LuckyNoS7evin)", template);
+        }
+
+        [Fact]
+        public void Test_Client_OnMessageWithFollowerAnnouncement()
+        {
+            var chatBot = new TwitchStreamChatBot();
+            string chatMessageRaw = "@badge-info=;badges=moderator/1,partner/1;color=#5B99FF;display-name=StreamElements;emotes=;flags=;id=0fce3cfc-04a4-42b2-a981-72cf7c8824a0;mod=1;room-id=61809127;subscriber=0;tmi-sent-ts=1571332723824;turbo=0;user-id=100135110;user-type=mod :streamelements!streamelements@streamelements.tmi.twitch.tv PRIVMSG #nick_larsen :Welcome to the class rexogamerswitch!";
+            var ircMessage = GetIrcMessage(chatMessageRaw);
+            var emoteCollection = new TwitchLib.Client.Models.MessageEmoteCollection();
+            var args = new OnMessageReceivedArgs()
+            {
+                ChatMessage = new TwitchLib.Client.Models.ChatMessage("nick_larsen", ircMessage, ref emoteCollection),
+            };
+            Assert.True(chatBot.Follows.Count == 0);
+            chatBot.Client_OnMessageReceived(null, args);
+            Assert.True(chatBot.Follows.Count == 1);
+            chatBot.Client_OnMessageReceived(null, args);
+            Assert.True(chatBot.Follows.Count == 1);
+
+            var template = chatBot.PopulateMarkdownTemplate().ToString();
+            Assert.Contains(": rexogamerswitch", template);
+        }
+
+        [Fact]
         public void Test_Client_OnHosted()
         {
             var chatBot = new TwitchStreamChatBot();
@@ -61,7 +101,7 @@ namespace ChatBot.Tests
         public void Test_Client_OnRaidNotification()
         {
             var chatBot = new TwitchStreamChatBot();
-            string chatMessageRaw = "TODO";
+            string chatMessageRaw = "@badge-info=;badges=;color=#FF0000;display-name=LuckyNoS7evin;emotes=;msg-param-viewerCount=4;id=306b2ca4-c4ee-4449-84cc-ef5b5cc1c74f;login=LuckyNoS7evin;mod=0;msg-id=raid;room-id=61809127;subscriber=0;system-msg=;tmi-sent-ts=1570725601895;turbo=0;user-id=51497560;user-type= :tmi.twitch.tv USERNOTICE #nick_larsen :";
             var ircMessage = GetIrcMessage(chatMessageRaw);
             var args = new OnRaidNotificationArgs()
             {

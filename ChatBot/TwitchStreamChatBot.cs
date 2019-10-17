@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using TwitchLib.Api;
 using TwitchLib.Api.V5.Models.Channels;
 using TwitchLib.Client;
-using TwitchLib.Client.Enums;
 using TwitchLib.Client.Events;
-using TwitchLib.Client.Extensions;
 using TwitchLib.Client.Models;
 
 namespace ChatBot
@@ -19,7 +18,9 @@ namespace ChatBot
         TwitchAPI api;
 
         Dictionary<string, Channel> teamMembers = new Dictionary<string, Channel>();
+        string myUserId;
         string teamName;
+        int approximateCurrentViewerCount = 0;
         HashSet<string> announcedTeamMembers = new HashSet<string>();
 
         public void Initialize(string username, string accessToken, string apiClientId, string apiAccessToken, string channel, string teamUrlSlug)
@@ -45,11 +46,14 @@ namespace ChatBot
             client.OnMessageReceived += Client_OnMessageReceived;
             client.OnConnected += Client_OnConnected;
             client.OnBeingHosted += Client_OnBeingHosted;
-            client.OnRaidNotification += Client_OnRaidNotification; // TODO this is probably me raiding at the end of stream
+            client.OnRaidNotification += Client_OnRaidNotification;
             client.OnNewSubscriber += Client_OnNewSubscriber;
             client.OnReSubscriber += Client_OnReSubscriber;
             client.OnGiftedSubscription += Client_OnGiftedSubscription;
             client.OnCommunitySubscription += Client_OnCommunitySubscription;
+            // TODO figure out if this is capturing an accurate representation of the current viewer count
+            // this is used for the raid out event where we track how many people we send somewhere else
+            client.OnExistingUsersDetected += Client_OnExistingUsersDetected;
         }
 
         private void InitializeTwitchAPI(string clientId, string accessToken)
@@ -58,6 +62,14 @@ namespace ChatBot
                 
             api.Settings.ClientId = clientId;
             api.Settings.AccessToken = accessToken;
+
+            var userIdTask = api.Helix.Users.GetUsersAsync(accessToken: accessToken);
+            var response = userIdTask.GetAwaiter().GetResult();
+            if (response.Users.Any())
+            {
+                myUserId = response.Users[0].Id;
+                Console.WriteLine($"******My user id is: {myUserId} ********");
+            }
         }
 
         private void InitializeTeam(string teamUrlSlug, string channel)
@@ -69,10 +81,10 @@ namespace ChatBot
             foreach(var user in team.Users)
             {
                 teamMembers.Add(user.Id, user);
-                if (user.DisplayName == channel)
-                {
-                    announcedTeamMembers.Add(user.Id);
-                }
+            }
+            if (myUserId != null)
+            {
+                announcedTeamMembers.Add(myUserId);
             }
 
             Console.WriteLine($"Identified {teamMembers.Count} members on the {teamName} team.");
@@ -90,23 +102,76 @@ namespace ChatBot
   
         public void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
         {
-            var userId = e.ChatMessage.UserId;
+            AnnounceTeamMember(e.ChatMessage);
+            RecordBitsEvent(e.ChatMessage);
+            CaptureRaidOut(e.ChatMessage);
+            CaptureFollow(e.ChatMessage);
+        }
+
+        private void AnnounceTeamMember(ChatMessage message)
+        {
+            var userId = message.UserId;
             if (teamMembers.ContainsKey(userId) && !announcedTeamMembers.Contains(userId))
             {
-                var username = e.ChatMessage.Username;
+                var username = message.Username;
                 var channelLink = teamMembers[userId].Url;
-                client.SendMessage(e.ChatMessage.Channel, $"Welcome @{username} from the {teamName} team!  They are awesome and you should check out their channel at {channelLink}");
-                announcedTeamMembers.Add(userId);
-            }
-            if (e.ChatMessage.Bits > 0)
-            {
-                var info = new CheerInfo()
+                client.SendMessage(message.Channel, $"Welcome @{username} from the {teamName} team!  They are awesome and you should check out their channel at {channelLink}");
+                lock(announcedTeamMembers)
                 {
-                    Channel = e.ChatMessage.Username,
-                    EventTime = DateTime.UtcNow,
-                    Bits = e.ChatMessage.Bits,
-                };
+                    announcedTeamMembers.Add(userId);
+                }
+            }
+        }
+
+        private void RecordBitsEvent(ChatMessage message)
+        {
+            if (message.Bits <= 0) return;
+            var info = new CheerInfo()
+            {
+                Channel = message.Username,
+                EventTime = DateTime.UtcNow,
+                Bits = message.Bits,
+            };
+            lock(cheers)
+            {
                 cheers.Add(info);
+            }
+        }
+
+        private void CaptureRaidOut(ChatMessage message)
+        {
+            const string raidPrefix = "/raid ";
+            //if (message.UserId != myUserId || !message.Message.StartsWith(raidPrefix)) return;
+            if (message.UserId != "61809127" || !message.Message.StartsWith(raidPrefix)) return;
+            endOfStreamRaid = new RaidInfo
+            {
+                Channel = message.Message.Substring(raidPrefix.Length),
+                EventTime = DateTime.UtcNow,
+                ViewerCount = approximateCurrentViewerCount,
+            };
+        }
+
+        private static Regex followMessageFormat = new Regex("Welcome to the class (?<username>[^!]+)!");
+        private void CaptureFollow(ChatMessage message)
+        {
+            const string streamElementsBotUserId = "100135110";
+            if (message.UserId != streamElementsBotUserId || !followMessageFormat.IsMatch(message.Message)) return;
+            var info = new FollowerInfo 
+            {
+                UserDisplayName = followMessageFormat.Match(message.Message).Groups["username"].Value,
+                EventTime = DateTime.UtcNow,
+            };
+            lock(follows)
+            {
+                var username = info.UserDisplayName;
+                if (follows.ContainsKey(username))
+                {
+                    follows[username] = info;
+                }
+                else
+                {
+                    follows.Add(username, info);
+                }
             }
         }
 
@@ -120,6 +185,8 @@ namespace ChatBot
         public IReadOnlyList<SubscriptionInfo> Subs => subs;
         List<CheerInfo> cheers = new List<CheerInfo>();
         public IReadOnlyList<CheerInfo> Cheers => cheers;
+        Dictionary<string, FollowerInfo> follows = new Dictionary<string, FollowerInfo>();
+        public IReadOnlyDictionary<string, FollowerInfo> Follows => follows;
 
         public void Client_OnRaidNotification(object sender, OnRaidNotificationArgs e)
         {
@@ -130,7 +197,17 @@ namespace ChatBot
                 EventTime = DateTime.UtcNow, // TODO: get this from the timestamp
                 ViewerCount = int.Parse(e.RaidNotificaiton.MsgParamViewerCount),
             };
-            endOfStreamRaid = info;
+            lock(raids)
+            {
+                if (!raids.ContainsKey(channel))
+                {
+                    raids.Add(channel, info);
+                }
+                else
+                {
+                    raids[channel] = info;
+                }
+            }
         }
 
         public void Client_OnBeingHosted(object sender, OnBeingHostedArgs e)
@@ -212,6 +289,11 @@ namespace ChatBot
             }
         }
 
+        public void Client_OnExistingUsersDetected(object sender, OnExistingUsersDetectedArgs e)
+        {
+            approximateCurrentViewerCount = e.Users.Count;
+        }
+
         public void WriteMarkdownTemplate(string filename)
         {
             var sb = PopulateMarkdownTemplate();
@@ -233,7 +315,10 @@ youtube_embed: https://www.youtube.com/embed/TODO
             sb.AppendLine("TODO: stream notes about what you actually accomplished");
             sb.AppendLine();
 
-            if (raids.Count > 0 || subs.Count > 0 || hosts.Count > 0 || cheers.Count > 0)
+            // TODO: get clips
+            // TODO: get markers
+
+            if (raids.Count > 0 || subs.Count > 0 || hosts.Count > 0 || cheers.Count > 0 || follows.Count > 0)
             {
                 sb.AppendLine("## Today's Supporters");
                 sb.AppendLine();
@@ -257,6 +342,18 @@ youtube_embed: https://www.youtube.com/embed/TODO
                     foreach(var cheer in cheers.OrderBy(m => m.EventTime))
                     {
                         sb.AppendLine($"- {cheer.EventTime}: {cheer.Channel} cheered with {cheer.Bits.ToString("#,#")} bits!");
+                    }
+                    sb.AppendLine();
+                }
+
+                // follows
+                if (follows.Count > 0)
+                {
+                    sb.AppendLine("### Followers");
+                    sb.AppendLine();
+                    foreach(var follower in follows.Select(m => m.Value).OrderBy(m => m.EventTime))
+                    {
+                        sb.AppendLine($"- {follower.EventTime}: {follower.UserDisplayName}");
                     }
                     sb.AppendLine();
                 }
@@ -289,7 +386,8 @@ youtube_embed: https://www.youtube.com/embed/TODO
             if (endOfStreamRaid != null) {
                 sb.AppendLine("## Pay it forward");
                 sb.AppendLine();
-                sb.AppendLine($"- {endOfStreamRaid.EventTime}: we raided [{endOfStreamRaid.Channel}](//twitch.tv/{endOfStreamRaid.Channel}) with {endOfStreamRaid.ViewerCount} viewers!");
+                var viewerCountText = endOfStreamRaid.ViewerCount > 0 ? $" with {endOfStreamRaid.ViewerCount} viewers" : "";
+                sb.AppendLine($"- {endOfStreamRaid.EventTime}: we raided [{endOfStreamRaid.Channel}](//twitch.tv/{endOfStreamRaid.Channel}){viewerCountText}!");
                 sb.AppendLine();
             }
             

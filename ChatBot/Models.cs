@@ -9,6 +9,12 @@ namespace ChatBot
         public int ViewerCount { get; set; }
     }
 
+    public class FollowerInfo
+    {
+        public string UserDisplayName { get; set; }
+        public DateTime EventTime { get; set; }
+    }
+
     public class CheerInfo
     {
         public string Channel { get; set; }
